@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, COURSE_ID, type Question } from '@/lib/supabase'
+import { supabase, COURSE_ID, type Question, type Answer } from '@/lib/supabase'
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -21,6 +21,13 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false)
   const [upvoting, setUpvoting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<string, Answer[]>>({})
+  const [answeringId, setAnsweringId] = useState<string | null>(null)
+  const [answerName, setAnswerName] = useState('')
+  const [answerText, setAnswerText] = useState('')
+  const [submittingAnswer, setSubmittingAnswer] = useState(false)
+  const [answerError, setAnswerError] = useState<string | null>(null)
+  const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({})
 
   const fetchQuestions = useCallback(async () => {
     const { data, error } = await supabase
@@ -31,9 +38,32 @@ export default function Home() {
     if (!error && data) setQuestions(data)
   }, [])
 
+  const fetchAnswers = useCallback(async (questionIds: string[]) => {
+    if (questionIds.length === 0) return
+    const { data, error } = await supabase
+      .from('answers')
+      .select('*')
+      .in('question_id', questionIds)
+      .order('created_at', { ascending: true })
+    if (!error && data) {
+      const grouped: Record<string, Answer[]> = {}
+      for (const a of data) {
+        if (!grouped[a.question_id]) grouped[a.question_id] = []
+        grouped[a.question_id].push(a)
+      }
+      setAnswers(grouped)
+    }
+  }, [])
+
   useEffect(() => {
-    fetchQuestions()
+    fetchQuestions().then(() => {})
   }, [fetchQuestions])
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      fetchAnswers(questions.map((q) => q.id))
+    }
+  }, [questions, fetchAnswers])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -71,6 +101,26 @@ export default function Home() {
       .update({ upvotes: newCount })
       .eq('id', question.id)
     setUpvoting(null)
+  }
+
+  async function handleSubmitAnswer(questionId: string) {
+    if (!answerName.trim() || !answerText.trim()) return
+    setSubmittingAnswer(true)
+    setAnswerError(null)
+    const { error } = await supabase.from('answers').insert({
+      question_id: questionId,
+      name: answerName.trim(),
+      answer_text: answerText.trim(),
+    })
+    if (error) {
+      setAnswerError(error.message)
+    } else {
+      setAnswerName('')
+      setAnswerText('')
+      setAnsweringId(null)
+      await fetchAnswers(questions.map((q) => q.id))
+    }
+    setSubmittingAnswer(false)
   }
 
   return (
@@ -228,10 +278,156 @@ export default function Home() {
                   {q.question_text}
                 </p>
                 <p style={{ margin: 0, fontSize: 13, color: '#8b8b9a' }}>
-                  <span style={{ color: '#a0a0b0' }}>{q.name}</span>
+                  <span style={{ color: '#a0a0b0' }}>Asked by {q.name}</span>
                   {' · '}
                   {timeAgo(q.created_at)}
                 </p>
+
+                {/* Answer / Answers controls */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', paddingTop: 10 }}>
+                  <button
+                    onClick={() => {
+                      setAnsweringId(answeringId === q.id ? null : q.id)
+                      setAnswerError(null)
+                    }}
+                    style={{
+                      background: '#7c6ff7',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '1px 6px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {answeringId === q.id ? 'Collapse Answer' : 'Answer'}
+                  </button>
+
+                  {(answers[q.id]?.length ?? 0) > 0 && (
+                    <button
+                      onClick={() =>
+                        setExpandedAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: !prev[q.id],
+                        }))
+                      }
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#7c6ff7',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '6px 0',
+                      }}
+                    >
+                      {expandedAnswers[q.id]
+                        ? `Hide ${answers[q.id].length} Existing Answer${answers[q.id].length === 1 ? '' : 's'}`
+                        : `${answers[q.id].length} Existing Answer${answers[q.id].length === 1 ? '' : 's'}`}
+                    </button>
+                  )}
+                </div>
+
+                {/* Answer form */}
+                {answeringId === q.id && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: 16,
+                      background: '#0d0d0f',
+                      border: '1px solid #2a2a32',
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div style={{ marginBottom: 12 }}>
+                      <input
+                        type="text"
+                        value={answerName}
+                        onChange={(e) => setAnswerName(e.target.value)}
+                        placeholder="Your name"
+                        style={{
+                          width: '100%',
+                          background: '#141417',
+                          border: '1px solid #2a2a32',
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          color: '#f0f0f2',
+                          fontSize: 14,
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <textarea
+                        value={answerText}
+                        onChange={(e) => setAnswerText(e.target.value)}
+                        placeholder="Write your answer…"
+                        rows={2}
+                        style={{
+                          width: '100%',
+                          background: '#141417',
+                          border: '1px solid #2a2a32',
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          color: '#f0f0f2',
+                          fontSize: 14,
+                          outline: 'none',
+                          resize: 'vertical',
+                          fontFamily: 'inherit',
+                        }}
+                      />
+                    </div>
+                    {answerError && (
+                      <p style={{ color: '#f87171', fontSize: 13, marginBottom: 8 }}>{answerError}</p>
+                    )}
+                    <button
+                      onClick={() => handleSubmitAnswer(q.id)}
+                      disabled={submittingAnswer}
+                      style={{
+                        background: submittingAnswer ? '#3d3775' : '#7c6ff7',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '8px 16px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: submittingAnswer ? 'not-allowed' : 'pointer',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {submittingAnswer ? 'Submitting…' : 'Submit Answer'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Answers list (separate expand/collapse from answer form) */}
+                {expandedAnswers[q.id] && (answers[q.id]?.length ?? 0) > 0 && (
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {answers[q.id].map((a) => (
+                      <div
+                        key={a.id}
+                        style={{
+                          padding: '10px 14px',
+                          background: '#0d0d0f',
+                          border: '1px solid #2a2a32',
+                          borderRadius: 8,
+                          borderLeft: '3px solid #7c6ff7',
+                        }}
+                      >
+                        <p style={{ margin: '0 0 6px', fontSize: 14, color: '#e0e0e4', lineHeight: 1.5 }}>
+                          {a.answer_text}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 12, color: '#8b8b9a' }}>
+                          <span style={{ color: '#a0a0b0' }}>{a.name}</span>
+                          {' · '}
+                          {timeAgo(a.created_at)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))
