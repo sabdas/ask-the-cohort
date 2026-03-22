@@ -7,6 +7,12 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 
 export const COURSE_ID = '8b616fb7-59c0-465d-acb7-e6e11b9adbdb'
 
+export type Course = {
+  id: string
+  course_name: string
+  course_description: string
+}
+
 export type Question = {
   id: string
   name: string

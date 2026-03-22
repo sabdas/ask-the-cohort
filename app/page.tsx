@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, COURSE_ID, type Question, type Answer } from '@/lib/supabase'
+import { supabase, COURSE_ID, type Question, type Course, type Answer } from '@/lib/supabase'
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -15,6 +15,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function Home() {
+  const [course, setCourse] = useState<Course | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [name, setName] = useState('')
   const [questionText, setQuestionText] = useState('')
@@ -56,7 +57,15 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    fetchQuestions().then(() => {})
+    fetchQuestions()
+    supabase
+      .from('course')
+      .select('id, course_name, course_description')
+      .eq('id', COURSE_ID)
+      .single()
+      .then(({ data }) => {
+        if (data) setCourse(data)
+      })
   }, [fetchQuestions])
 
   useEffect(() => {
@@ -130,6 +139,13 @@ export default function Home() {
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: '#f0f0f2' }}>
           Ask the Cohort
         </h1>
+        {course && (
+          <p style={{ margin: '8px 0 0', fontSize: 15, color: '#8b8b9a' }}>
+            <span style={{ fontSize: 17, fontWeight: 600, color: '#f0f0f2' }}>{course.course_name}</span>
+            <span style={{ marginLeft: 8 }} />
+            <em>{course.course_description}</em>
+          </p>
+        )}
         <p style={{ margin: '8px 0 0', color: '#8b8b9a', fontSize: 15 }}>
           Ask a question. The most upvoted rise to the top.
         </p>
