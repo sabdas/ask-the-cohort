@@ -21,3 +21,11 @@ export type Question = {
   created_at: string
   course_id: string
 }
+
+export type Answer = {
+  id: string
+  question_id: string
+  name: string
+  answer_text: string
+  created_at: string
+}
