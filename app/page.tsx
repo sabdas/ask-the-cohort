@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, COURSE_ID, type Question, type Course } from '@/lib/supabase'
+import { supabase, COURSE_ID, type Question, type Course, type Answer } from '@/lib/supabase'
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
